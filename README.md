@@ -1,4 +1,4 @@
-# mobrew: The Physicist's Tea Timer
+# mobrew: Accurated, Simulated Tea Timer
 
 `mobrew` is not just a timer.
 It’s a real-time kinetic simulator for the perfect cup of tea.
