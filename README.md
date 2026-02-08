@@ -1,5 +1,7 @@
 # mobrew: Accurate, Simulated Tea Timer
 
+[Demo](./demo.gif)
+
 `mobrew` is not just a timer.
 It’s a real-time kinetic simulator for the perfect cup of tea.
 
