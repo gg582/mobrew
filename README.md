@@ -2,10 +2,6 @@
 
 ![Demo](./demo.gif)
 
-*Mobrew declares 'how many times do you brew'.*
-
-*Mobrew calculated just twice, because it is the best fit.*
-
 `mobrew` is not just a timer.
 It’s a real-time kinetic simulator for the perfect cup of tea.
 
