@@ -34,7 +34,7 @@ $$\frac{dH}{dt} = k_{hyd} \cdot (1 - H) \cdot \frac{\exp\left(\frac{T - 100}{15}
 
 ### 2.2. Thermodynamic Decay (Cooling)
 $$\frac{dT}{dt} = -k_{cool} \cdot T + Q_{heat}$$
-$$k_{cool} = 0.02 \cdot \frac{1}{C_p} \cdot \text{insulation\_factor}$$
+$$k_{cool} = 0.02 \cdot \frac{1}{C_p} \cdot \text{insulation factor}$$
 
 *   **$C_p$**: Specific heat of vessel material (e.g., Zisha, Porcelain).
 *   **Insulation**: Butter layer (Tibetan style) reduces $k_{cool}$ by 80%.
