@@ -35,6 +35,7 @@ $$\frac{dH}{dt} = k_{hyd} \cdot (1 - H) \cdot \frac{\exp\left(\frac{T - 100}{15}
 ### 2.2. Thermodynamic Decay (Cooling)
 $$\frac{dT}{dt} = -k_{cool} \cdot T + Q_{heat}$$
 $$k_{cool} = 0.02 \cdot \frac{1}{C_p} \cdot \text{insulation\_factor}$$
+
 *   **$C_p$**: Specific heat of vessel material (e.g., Zisha, Porcelain).
 *   **Insulation**: Butter layer (Tibetan style) reduces $k_{cool}$ by 80%.
 
@@ -42,7 +43,7 @@ $$k_{cool} = 0.02 \cdot \frac{1}{C_p} \cdot \text{insulation\_factor}$$
 For each component $i$ (Catechin, Amino Acid, Caffeine, Pectin, Polysaccharide):
 $$\frac{de_i}{dt} = k_{i,eff} \cdot (S_i - (e_{i,accum} + e_{i,curr}))$$
 The effective rate constant $k_{i,eff}$ incorporates temperature, the hydration-driven geometry factor, water quality, and a session-based lag penalty:
-$$k_{i,eff} = k_i \cdot \exp\left(sens_i \cdot \frac{T - 100}{30}\right) \cdot \sqrt{H} \cdot \omega_{water} \cdot \Gamma_{turbulence} \cdot lag(t_{session})$$
+$$k_{i,eff} = k_i \cdot \exp\left(sens_i \cdot \frac{T - 100}{30}\right) \cdot \sqrt{H} \cdot \omega_{water} \cdot \Gamma_{turbulence} \cdot lag(t_{\text{session}})$$
 *   **$S_i$**: Maximum soluble mass in mg/g.
 *   **$e_{i,accum}$**: Mass extracted in all previous infusions.
 *   **$\omega_{water}$**: Water quality factor (see 2.6).
