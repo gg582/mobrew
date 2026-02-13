@@ -60,6 +60,7 @@ typedef struct {
     ttak_bigreal_t ext_pectin;
     ttak_bigreal_t ext_polysaccharide;
     ttak_bigreal_t ext_lignin;       // Structural compounds released on rupture
+    ttak_bigreal_t ext_aroma;        // Volatile aromatics captured during infusion
 
     // Accumulated from previous infusions
     ttak_bigreal_t accum_ext_catechin;
@@ -68,6 +69,7 @@ typedef struct {
     ttak_bigreal_t accum_ext_pectin;
     ttak_bigreal_t accum_ext_polysaccharide;
     ttak_bigreal_t accum_ext_lignin;
+    ttak_bigreal_t accum_ext_aroma;
     
     // New Physics Model State
     ttak_bigreal_t structural_integrity; // 1.0 (intact) to 0.0 (destroyed)
@@ -78,6 +80,11 @@ typedef struct {
     ttak_bigreal_t sweetness_rate;   // d(sweetness)/dt
     ttak_bigreal_t saturation_index; // Total saturation
     _Bool stop_signal;               // Stop trigger
+    ttak_bigreal_t aroma_extraction_axis;  // mg/min of captured aromatics
+    ttak_bigreal_t aroma_volatility_axis;  // mg/min being lost to volatility
+    ttak_bigreal_t amino_depth_axis;       // Normalized amino body
+    ttak_bigreal_t amino_vibrancy_axis;    // mg/min change in amino acids
+    ttak_bigreal_t clarity_index;          // mg/ml of heavy colloids for style clamp
     
     // Unit Preferences
     unit_system_t unit_system;
@@ -87,6 +94,11 @@ typedef struct {
     // Derivatives for display
     ttak_bigreal_t ext_velocity;     // dC/dt
     ttak_bigreal_t bitter_accel;     // d2B/dt2
+
+    // Tea Distributor Algorithm state
+    ttak_bigreal_t distributor_potential;    // Remaining mg/ml that can still be extracted
+    ttak_bigreal_t distributor_drag_ratio;   // Actual vs expected flow for rebalancing
+    ttak_bigreal_t distributor_target_hint;  // Suggested allocation for the active infusion
     
     // Configuration
     tea_type_t tea_type;

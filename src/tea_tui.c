@@ -76,6 +76,13 @@ static double ask_number(const char *question) {
     return (strlen(buf) > 0) ? atof(buf) : 0.0;
 }
 
+// Once an infusion halts we should not show stale aroma flux numbers
+static void reset_aroma_flow_axes(tea_state_t *state) {
+    if (!state) return;
+    set_br_d(&state->aroma_extraction_axis, 0.0);
+    set_br_d(&state->aroma_volatility_axis, 0.0);
+}
+
 int tui_show_config_wizard(ttak_shared_tea_state_t *shared_state, ttak_owner_t *owner) {
     ttak_shared_result_t res;
     tea_state_t *state = ttak_shared_tea_state_access(shared_state, owner, &res);
@@ -318,15 +325,23 @@ int tui_show_config_wizard(ttak_shared_tea_state_t *shared_state, ttak_owner_t *
     set_br_d(&state->ext_pectin, 0.0);
     set_br_d(&state->ext_polysaccharide, 0.0);
     set_br_d(&state->ext_lignin, 0.0);
+    set_br_d(&state->ext_aroma, 0.0);
     set_br_d(&state->accum_ext_catechin, 0.0);
     set_br_d(&state->accum_ext_amino_acid, 0.0);
     set_br_d(&state->accum_ext_caffeine, 0.0);
     set_br_d(&state->accum_ext_pectin, 0.0);
     set_br_d(&state->accum_ext_polysaccharide, 0.0);
     set_br_d(&state->accum_ext_lignin, 0.0);
+    set_br_d(&state->accum_ext_aroma, 0.0);
     set_br_d(&state->hydration_state, 0.0);
     set_br_d(&state->structural_integrity, 1.0); 
     set_br_d(&state->astringency_rate, 0.0);
+                    set_br_d(&state->aroma_extraction_axis, 0.0);
+                    set_br_d(&state->aroma_volatility_axis, 0.0);
+                    set_br_d(&state->amino_depth_axis, 0.0);
+                    set_br_d(&state->amino_vibrancy_axis, 0.0);
+                    set_br_d(&state->clarity_index, 0.0);
+    set_br_d(&state->clarity_index, 0.0);
 
     tea_profile_t tp;
     get_tea_profile(state->tea_type, &tp);
@@ -349,10 +364,11 @@ int tui_show_config_wizard(ttak_shared_tea_state_t *shared_state, ttak_owner_t *
         } else {
             // Case B: Water in kettle -> Just Cooling
             ttak_bigreal_t temp_out;
-            ttak_bigreal_init(&temp_out, 0);
+            uint64_t now_wiz = ttak_get_tick_count();
+            ttak_bigreal_init(&temp_out, now_wiz);
             physics_backtrack_cooling(&temp_out, &state->current_temp, lag_ms);
-            ttak_bigreal_copy(&state->current_temp, &temp_out, 0);
-            ttak_bigreal_free(&temp_out, 0);
+            ttak_bigreal_copy(&state->current_temp, &temp_out, now_wiz);
+            ttak_bigreal_free(&temp_out, now_wiz);
         }
     }
 
@@ -489,7 +505,7 @@ static void draw_leaching_box(int start_y, int start_x, double level, double vel
 
 static void draw_leaf_render(int start_y, int start_x, double unfurl) {
     attron(COLOR_PAIR(1) | A_BOLD);
-    mvprintw(start_y, start_x, "Leaf Morphology (Unicode Block Art)");
+    mvprintw(start_y, start_x, "Leaf Morphology");
     
     if (unfurl < 0.25) {
         // Stage 1: Tightly Rolled / Pearl style
@@ -540,8 +556,10 @@ void tui_run_dashboard(ttak_shared_tea_state_t *shared_state, ttak_owner_t *owne
                     state->current_infusion = 1;
                     
                     // Set extraction targets for the first cycle
-                    ttak_bigreal_copy(&state->cycle_start_extraction, &state->extraction_level, 0);
-                    set_br_d(&state->target_extraction_for_cycle, 100.0 / state->num_infusions);
+                    ttak_bigreal_copy(&state->cycle_start_extraction, &state->extraction_level, now);
+                    double base_slice = 100.0 / (state->num_infusions ? state->num_infusions : 1);
+                    double adjusted_slice = tea_distributor_adjust_target(state, base_slice);
+                    set_br_d(&state->target_extraction_for_cycle, adjusted_slice);
                     
                     state->cycle_active = true;
                     // Reset cycle start time to now to ensure time starts from 0 for 1st infusion
@@ -567,13 +585,13 @@ void tui_run_dashboard(ttak_shared_tea_state_t *shared_state, ttak_owner_t *owne
 
                     // Before starting next infusion, move current extraction to accumulated
                     ttak_bigreal_t tmp, total;
-                    ttak_bigreal_init(&tmp, 0);
-                    ttak_bigreal_init(&total, 0);
+                    ttak_bigreal_init(&tmp, now);
+                    ttak_bigreal_init(&total, now);
                     
                     #define ACCUM_EXT(field) \
-                        ttak_bigreal_copy(&tmp, &state->accum_ext_##field, 0); \
-                        ttak_bigreal_add(&total, &tmp, &state->ext_##field, 0); \
-                        ttak_bigreal_copy(&state->accum_ext_##field, &total, 0); \
+                        ttak_bigreal_copy(&tmp, &state->accum_ext_##field, now); \
+                        ttak_bigreal_add(&total, &tmp, &state->ext_##field, now); \
+                        ttak_bigreal_copy(&state->accum_ext_##field, &total, now); \
                         set_br_d(&state->ext_##field, 0.0);
 
                     ACCUM_EXT(catechin)
@@ -582,16 +600,21 @@ void tui_run_dashboard(ttak_shared_tea_state_t *shared_state, ttak_owner_t *owne
                     ACCUM_EXT(pectin)
                     ACCUM_EXT(polysaccharide)
                     ACCUM_EXT(lignin)
+                    ACCUM_EXT(aroma)
                     #undef ACCUM_EXT
                     
-                    ttak_bigreal_free(&tmp, 0);
-                    ttak_bigreal_free(&total, 0);
+                    ttak_bigreal_free(&tmp, now);
+                    ttak_bigreal_free(&total, now);
 
                     // Reset derivatives and signals for fresh start
                     set_br_d(&state->astringency_rate, 0.0);
                     set_br_d(&state->sweetness_rate, 0.0);
                     set_br_d(&state->ext_velocity, 0.0);
                     set_br_d(&state->bitter_accel, 0.0);
+                    set_br_d(&state->aroma_extraction_axis, 0.0);
+                    set_br_d(&state->aroma_volatility_axis, 0.0);
+                    set_br_d(&state->amino_depth_axis, 0.0);
+                    set_br_d(&state->amino_vibrancy_axis, 0.0);
                     state->stop_signal = false;
 
                     state->current_infusion++;
@@ -633,9 +656,10 @@ void tui_run_dashboard(ttak_shared_tea_state_t *shared_state, ttak_owner_t *owne
                     state->last_update_time = state->cycle_start_time;
 
                     // Set extraction targets
-                    ttak_bigreal_copy(&state->cycle_start_extraction, &state->extraction_level, 0);
-                    // Each cycle aims to add an equal slice of extraction regardless of prior totals
-                    set_br_d(&state->target_extraction_for_cycle, 100.0 / state->num_infusions);
+                    ttak_bigreal_copy(&state->cycle_start_extraction, &state->extraction_level, now);
+                    double base_slice = 100.0 / (state->num_infusions ? state->num_infusions : 1);
+                    double adjusted_slice = tea_distributor_adjust_target(state, base_slice);
+                    set_br_d(&state->target_extraction_for_cycle, adjusted_slice);
                     
                     state->cycle_active = true;
                     nodelay(stdscr, TRUE);
@@ -648,6 +672,7 @@ void tui_run_dashboard(ttak_shared_tea_state_t *shared_state, ttak_owner_t *owne
                 // Stop At Acceleration Surge: Signal brew completion when bitterness overwhelms sweetness
                 if (state->stop_signal) {
                     state->cycle_active = false;
+                    reset_aroma_flow_axes(state);
                 }
                 
                 // Fallback: Check if target reached (Traditional saturation goal)
@@ -658,6 +683,7 @@ void tui_run_dashboard(ttak_shared_tea_state_t *shared_state, ttak_owner_t *owne
                 
                 if (cycle_progress >= target_ext) {
                     state->cycle_active = false;
+                    reset_aroma_flow_axes(state);
                     // Clamp to the planned increment so later infusions still have headroom
                     double final_ext = start_ext + target_ext;
                     if (final_ext > 100.0) final_ext = 100.0;
@@ -717,6 +743,14 @@ void tui_run_dashboard(ttak_shared_tea_state_t *shared_state, ttak_owner_t *owne
             attroff(A_BOLD);
 
             mvprintw(7, 5, "Extraction : %.2f %%", get_double_br(&state->extraction_level));
+
+            double distributor_potential = get_double_br(&state->distributor_potential);
+            double distributor_target = get_double_br(&state->distributor_target_hint);
+            if (distributor_target <= 0.0 && state->num_infusions) {
+                distributor_target = 100.0 / state->num_infusions;
+            }
+            mvprintw(8, 5, "Tea Distributor: %.1f mg/ml potential | %.2f %% share",
+                     distributor_potential, distributor_target);
             
             // Draw progress bar
             int bar_width = 40;
@@ -724,7 +758,7 @@ void tui_run_dashboard(ttak_shared_tea_state_t *shared_state, ttak_owner_t *owne
             if (progress > 1.0) progress = 1.0;
             int filled = (int)(progress * bar_width);
             
-            mvprintw(8, 5, "[");
+            mvprintw(9, 5, "[");
             for(int i=0; i<bar_width; i++) {
                 if(i < filled) addch('=');
                 else addch(' ');
@@ -732,10 +766,19 @@ void tui_run_dashboard(ttak_shared_tea_state_t *shared_state, ttak_owner_t *owne
             addch(']');
 
             // Detailed composition
-            mvprintw(10, 5, "--- Composition ---");
-            mvprintw(11, 7, "Catechin: %.2f mg", get_double_br(&state->ext_catechin));
-            mvprintw(12, 7, "Theanine: %.2f mg", get_double_br(&state->ext_amino_acid));
-            mvprintw(13, 7, "Caffeine: %.2f mg", get_double_br(&state->ext_caffeine));
+            mvprintw(11, 5, "--- Composition ---");
+            mvprintw(12, 7, "Catechin: %.2f mg", get_double_br(&state->ext_catechin));
+            mvprintw(13, 7, "Theanine: %.2f mg", get_double_br(&state->ext_amino_acid));
+            mvprintw(14, 7, "Caffeine: %.2f mg", get_double_br(&state->ext_caffeine));
+            mvprintw(15, 7, "Aroma: %.2f mg  +%.2f / -%.2f mg/min",
+                     get_double_br(&state->ext_aroma),
+                     get_double_br(&state->aroma_extraction_axis),
+                     get_double_br(&state->aroma_volatility_axis));
+            mvprintw(16, 7, "Theanine Axes: Body %.0f %% | Flow %.2f mg/min",
+                     get_double_br(&state->amino_depth_axis) * 100.0,
+                     get_double_br(&state->amino_vibrancy_axis));
+            mvprintw(17, 7, "Clarity Index: %.2f mg/ml  (<= 1.30)",
+                     get_double_br(&state->clarity_index));
             
             // Hydration Bar
             double h = get_double_br(&state->hydration_state);
@@ -743,14 +786,14 @@ void tui_run_dashboard(ttak_shared_tea_state_t *shared_state, ttak_owner_t *owne
             if (h_filled > 12) h_filled = 12;
             if (h_filled < 0) h_filled = 0;
             int h_empty = 12 - h_filled;
-            mvprintw(14, 5, "Hydration : ");
+            mvprintw(18, 5, "Hydration : ");
             for (int i = 0; i < h_filled; i++) addstr("\xE2\x96\x88");
             for (int i = 0; i < h_empty; i++) addstr("\xE2\x96\x91");
             printw(" %.2f", h);
             
             // Saturation Index
-            mvprintw(11, 35, "Saturation: %.1f %%", get_double_br(&state->saturation_index) * 100.0);
-            
+            mvprintw(12, 35, "Saturation: %.1f %%", get_double_br(&state->saturation_index) * 100.0);
+
             // Draw Leaching Simulator Box (Updated call)
             draw_leaching_box(5, 50, get_double_br(&state->extraction_level), get_double_br(&state->ext_velocity) / 100.0);
 
@@ -760,7 +803,7 @@ void tui_run_dashboard(ttak_shared_tea_state_t *shared_state, ttak_owner_t *owne
             // Warning if over-extracted
             if (get_double_br(&state->astringency_rate) > 0.5) {
                 attron(COLOR_PAIR(3) | A_BLINK);
-                mvprintw(15, 5, "!!! WARNING: Bitterness Acceleration High !!!");
+                mvprintw(20, 5, "!!! WARNING: Bitterness Acceleration High !!!");
                 attroff(COLOR_PAIR(3) | A_BLINK);
             }
 

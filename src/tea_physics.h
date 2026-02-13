@@ -25,6 +25,7 @@ typedef struct {
     double s_caffeine;
     double s_pectin;
     double s_polysaccharide;
+    double s_aroma;
 
     // Extraction rate constants at 100C (min^-1)
     double k_catechin;
@@ -32,6 +33,7 @@ typedef struct {
     double k_caffeine;
     double k_pectin;
     double k_polysaccharide;
+    double k_aroma;
 
     // Temperature sensitivity (Activation Energy factor / R)
     // Higher means more sensitive to temperature
@@ -40,6 +42,10 @@ typedef struct {
     double sens_caffeine;
     double sens_pectin;
     double sens_polysaccharide;
+    double sens_aroma;
+
+    // Base volatility loss multiplier for aromatics
+    double aroma_volatility_base;
 } tea_comp_profile_t;
 
 void get_vessel_props(vessel_type_t type, vessel_props_t *props);
@@ -62,6 +68,9 @@ void physics_get_extraction_rate(ttak_bigreal_t *rate_out, const tea_state_t *st
 
 // Helper to get bitterness acceleration
 void physics_get_bitterness_accel(ttak_bigreal_t *accel_out, const tea_state_t *state);
+
+// Tea Distributor algorithm helper
+double tea_distributor_adjust_target(tea_state_t *state, double base_slice_pct);
 
 // Cleanup helper
 void tea_state_init(tea_state_t *state);

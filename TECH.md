@@ -50,6 +50,14 @@ $$k_{i,eff} = k_i \cdot \exp\left(sens_i \cdot \frac{T - 100}{30}\right) \cdot \
 *   **$\Gamma_{turbulence}$**: Turbulence factor for active boiling (see 2.7).
 *   **$lag(t_{session})$**: A 30-second ramp-up factor modeling fresh water contact.
 
+#### Aromatic Capture and Amino Axes
+*   **Aroma Extraction vs. Volatility**: Aromatic solubles are tracked with normal extraction kinetics, but a vessel-dependent volatility drain continuously removes a portion of the captured aromatics. Two axes are rendered in the TUI:
+    *   `aroma_extraction_axis` (mg/min entering the liquor)
+    *   `aroma_volatility_axis` (mg/min simultaneously lost to the air). Thin-lidded glass/gaiwan vessels and high turbulence drive this upward.
+    *   The simulator now forecasts the next volatility step and, once that projection shows vapor losses climbing past roughly 40 % of the simultaneous extraction (≈60/40 split), it ends the pour—provided the captured aromatics are still above the human perception floor.
+*   **Amino Body & Flow**: Amino acids expose a normalized body (`amino_depth_axis = e_{ami} / S_{ami}`) and a live slope (`amino_vibrancy_axis = de_{ami}/dt`). Together with the aroma axes they gate the priority-stop window so the cut happens only when the cup is still supple.
+*   **Clarity Bias**: In gongfu/standard mode the simulator scales down pectin/polysaccharide kinetics using `clarity_bias = 0.55 + 0.45(1 - \text{saturation})`, suppressing heavy colloids so the liquor stays light even when multiple infusions are planned.
+
 ### 2.6. Water Quality Correction ($\omega_{water}$)
 Solute solubility decreases as the solvent (water) is pre-saturated with minerals:
 $$\omega_{water} = \max\left(0.7, 1.0 - \frac{TDS - 100}{2000}\right) \text{ if } TDS > 100$$
@@ -77,6 +85,14 @@ $$\text{Stop if: } \frac{d^2B}{dt^2} > \frac{d^2S}{dt^2}$$
 Stops when heavy solutes reach a target concentration representing a "thick" mouthfeel:
 $$\text{Stop if: } \frac{(1.5e_{pec} + 1.0e_{pol} + 2.0e_{lig}) \cdot m_{leaf}}{V} \ge 3.0 \text{ mg/ml}$$
 
+#### C. Aroma-Priority Stop Window
+For gongfu/standard styles the simulator now looks at the aromatic and amino axes before the acceleration check:
+*   **Capture Threshold**: Requires at least 62 % of the aromatic plateau with extraction still outpacing volatility by >0.003 mg/min.
+*   **Preemptive Volatility Cut**: A forward-pass estimates the next volatility pulse and halts the pour whenever that projection shows volatilized aromatics rising to ~40 % of the simultaneous extraction (≈6:4 split), as long as the captured load is still above the sensory floor.
+*   **Amino Guardrail**: Amino body must exceed 35 % with a vibrancy slope ≥0.015 mg/min so the liquor does not taste hollow.
+*   **Clarity Ceiling**: Heavy colloids are monitored even outside decoction. If `(1.5e_{pec} + e_{pol} + 2e_{lig}) \cdot m_{leaf} / V` exceeds ~1.3 mg/ml, the simulator halts the infusion and allows extraction progress to dip accordingly, yielding the “clear, aromatic” profile that sits between British thickness and ultra-short Chinese rinses.
+*   **Progress Override**: When either of the above style cues fire, extraction snaps to the override score so the dashboard reflects the intended airy-yet-fragrant mouthfeel.
+
 ### 2.9. Leaf Unfurling & Surface Area Geometry
 
 The simulator treats leaf expansion as a mechanical response to hydration ($H$) and temperature ($T$):
@@ -100,6 +116,31 @@ The physical shape and opening diameter of the vessel influence the extraction r
 $$k_{i,eff} \propto \Xi_{vessel}$$
 - **$\Xi_{gaiwan} = 1.25$**: High opening-to-depth ratio allows for greater convective mixing and easier leaf expansion.
 - **$\Xi_{teapot} = 1.00$**: Standard baseline for enclosed brewing.
+
+### 2.11. Tea Distributor Algorithm
+
+Long gongfu sessions can drag when one infusion stubbornly lags behind the rest, leading to uneven taste distribution across later pours. The **Tea Distributor Algorithm** continuously predicts how much soluble mass is still locked inside the leaves and automatically rebalances the extraction targets of the remaining infusions.
+
+1. **Geometry-Aware Leaf Count**  
+   The simulator reconstructs an approximate per-leaf mass using the configured leaf geometry (width & height), the tea profile's density, and a 0.3 mm thickness assumption:  
+   $$m_{\text{leaf}} = \rho_{leaf} \times \frac{w \cdot h}{100} \times 0.03$$  
+   The total leaf count $N$ is $m_{leaf\_mass} / m_{\text{leaf}}$. This feeds into a geometry factor  
+   $$\Gamma_{geo} = 0.6 + 0.25 \frac{N}{N+4} + 0.15 \left(\tanh\frac{\max(w,h)}{45} + 0.5\right)$$
+
+2. **Potential Concentration**  
+   The remaining soluble load is computed from the component plateaus ($S_i$), tea mass, and total extraction level:  
+   $$C_{pot} = \frac{\Gamma_{geo} \cdot ( \sum_i S_i ) \cdot m_{leaf} \cdot (1 - EY_{total})}{V_{inf}} \quad [\text{mg/ml}]$$  
+   This value is exposed on the dashboard so the user can see how much flavor headroom is left.
+
+3. **Drag Detection**  
+   Expected kinetics are derived from the tea profile’s base velocity, hydration state, and the geometry factor. The real-time sweetness velocity ($dS/dt$) provides the measured rate. Their ratio is the **drag ratio**:
+   $$\text{drag} = \text{clamp}\left(\frac{\dot{S}_{actual}}{\dot{S}_{expected}}, 0.4, 1.8\right)$$  
+   Values below 1.0 indicate a lagging infusion.
+
+4. **Dynamic Target Allocation**  
+   For each infusion, the baseline target is the remaining extraction percentage divided by the number of infusions left. The distributor scales this slice by a composite factor that blends the potential concentration, tea-type velocity bias, leaf-length factor, and the drag ratio (clamped to \(0.4-1.6\times\)). The result becomes the new `target_extraction_for_cycle`, and the dashboard shows the per-infusion share hint.
+
+This mechanism ensures that when one stage is slow or underperforming, the simulator automatically reallocates the remaining “flavor budget” so later infusions can still deliver meaningful cups.
 
 ---
 
@@ -137,3 +178,8 @@ make
 *   **Leaf Hydration**: Real-time expansion status of the leaves.
 *   **Astringency Δ**: Instantaneous rate of bitter compound release.
 *   **Target Point**: The 100% mark where the balance of flavor is theoretically ideal.
+*   **Aroma/Amino Axes**: Shows captured aroma mass plus extraction vs. volatility rates, and the amino body/flow pair that governs the aroma-priority stop window.
+*   **Clarity Index**: Real-time heavy-colloid concentration (mg/ml) with a highlighted 1.3 threshold so you can see when the simulator is about to issue the “clear, aromatic” stop cue.
+
+### Session Halt Guardrail
+If the Tea Distributor determines the remaining flavor potential per infusion falls below ~0.35 % or the concentration potential drops under ~0.8 mg/ml, the dashboard surfaces a modal message, **“You can't steep more,”** and the session terminates—even if the user originally asked for seven or more infusions.
