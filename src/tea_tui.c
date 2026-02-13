@@ -634,7 +634,8 @@ void tui_run_dashboard(ttak_shared_tea_state_t *shared_state, ttak_owner_t *owne
 
                     // Set extraction targets
                     ttak_bigreal_copy(&state->cycle_start_extraction, &state->extraction_level, 0);
-                    set_br_d(&state->target_extraction_for_cycle, (double)state->current_infusion * 100.0 / state->num_infusions);
+                    // Each cycle aims to add an equal slice of extraction regardless of prior totals
+                    set_br_d(&state->target_extraction_for_cycle, 100.0 / state->num_infusions);
                     
                     state->cycle_active = true;
                     nodelay(stdscr, TRUE);
@@ -650,12 +651,17 @@ void tui_run_dashboard(ttak_shared_tea_state_t *shared_state, ttak_owner_t *owne
                 }
                 
                 // Fallback: Check if target reached (Traditional saturation goal)
+                double start_ext = get_double_br(&state->cycle_start_extraction);
                 double current_ext = get_double_br(&state->extraction_level);
                 double target_ext = get_double_br(&state->target_extraction_for_cycle);
+                double cycle_progress = current_ext - start_ext;
                 
-                if (current_ext >= target_ext) {
+                if (cycle_progress >= target_ext) {
                     state->cycle_active = false;
-                    set_br_d(&state->extraction_level, target_ext); // Clamp to target
+                    // Clamp to the planned increment so later infusions still have headroom
+                    double final_ext = start_ext + target_ext;
+                    if (final_ext > 100.0) final_ext = 100.0;
+                    set_br_d(&state->extraction_level, final_ext);
                 }
             }
             
