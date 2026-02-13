@@ -6,8 +6,6 @@
 
 ## 1. Core Physics & Simulation Logic
 
-The simulation has been refactored to treat tea leaves as dynamic physical structures that expand and release compounds non-linearly.
-
 ### A. Hydration-Driven Geometry Model
 *   **Concept**: Dry tea leaves have minimal effective surface area. As they absorb water, they expand toward their asymptotic limit ($A_{wet}$), increasing the contact area for extraction.
 *   **Hydration State ($H$)**: A dimensionless value from 0.0 (bone dry) to 1.0 (fully saturated).
