@@ -1,4 +1,4 @@
-# mobrew: Accurate, Simulated Tea Timer
+# mobrew: Accuratly Simulated Tea Timer
 
 ![Demo](./demo.gif)
 
